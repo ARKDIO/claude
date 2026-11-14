@@ -13,7 +13,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val status = DownloadCenter.status
     val engine = Engine.state
 
+    private val prefs = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+
     var url by mutableStateOf("")
+
+    /** Chosen video quality, remembered between app launches. */
+    var quality by mutableStateOf(
+        Quality.entries.getOrNull(prefs.getInt(KEY_QUALITY, 0)) ?: Quality.BEST
+    )
+        private set
+
+    fun selectQuality(q: Quality) {
+        quality = q
+        prefs.edit().putInt(KEY_QUALITY, q.ordinal).apply()
+    }
     var message by mutableStateOf<String?>(null)
         private set
     var updating by mutableStateOf(false)
@@ -30,7 +43,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             DownloadCenter.isBusy -> message = "이미 다운로드 중이에요. 끝나면 다시 눌러 주세요"
             else -> {
                 url = link
-                DownloadService.start(getApplication(), link, mode)
+                DownloadService.start(getApplication(), link, mode, quality)
             }
         }
     }
@@ -53,6 +66,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
+        private const val KEY_QUALITY = "quality"
         private val URL_REGEX = Regex("""https?://\S+""")
 
         fun extractUrl(text: String?): String? =

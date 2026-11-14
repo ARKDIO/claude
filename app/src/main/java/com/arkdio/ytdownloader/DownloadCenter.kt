@@ -7,6 +7,22 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class Mode { VIDEO, AUDIO }
 
+/**
+ * Video quality choices. Every option downloads the original YouTube stream
+ * (no re-encoding) — lower choices simply pick a smaller stream from the start.
+ *
+ * @param maxRes  upper bound on resolution (shorter side), null = no limit
+ * @param compat  prefer H.264 (avc1) so it plays on old phones / PCs
+ */
+enum class Quality(val label: String, val maxRes: Int?, val compat: Boolean = false) {
+    BEST("최고화질", null),
+    UHD_4K("4K", 2160),
+    QHD("1440p", 1440),
+    FHD("1080p", 1080),
+    HD("720p", 720),
+    COMPAT("호환 모드", 1080, compat = true),
+}
+
 sealed interface DownloadStatus {
     data object Idle : DownloadStatus
 

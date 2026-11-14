@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -19,6 +20,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -46,6 +48,7 @@ import com.arkdio.ytdownloader.DownloadStatus
 import com.arkdio.ytdownloader.EngineState
 import com.arkdio.ytdownloader.MainViewModel
 import com.arkdio.ytdownloader.Mode
+import com.arkdio.ytdownloader.Quality
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,13 +105,24 @@ fun MainScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("📋 클립보드에서 붙여넣기") }
 
+            QualityPicker(
+                selected = viewModel.quality,
+                enabled = !busy,
+                onSelect = viewModel::selectQuality,
+            )
+
             Button(
                 onClick = { onDownload(Mode.VIDEO) },
                 enabled = !busy && engine is EngineState.Ready,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-            ) { Text("🎬 영상 다운로드 (최고화질)", style = MaterialTheme.typography.titleMedium) }
+            ) {
+                Text(
+                    "🎬 영상 다운로드 (${viewModel.quality.label})",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
 
             FilledTonalButton(
                 onClick = { onDownload(Mode.AUDIO) },
@@ -129,13 +143,50 @@ fun MainScreen(
             EngineRow(engine, viewModel.updating, enabled = !busy, onUpdate = viewModel::updateEngine)
 
             Text(
-                "• 영상은 갤러리(Movies/YTDownloader)에 저장돼요\n" +
+                "• 어떤 화질을 골라도 변환 없이 원본 그대로 받아서 화질 저하가 없어요\n" +
+                    "• 낮은 화질을 고르면 처음부터 작은 영상을 받아서 용량이 줄어요\n" +
+                    "• 호환 모드: 오래된 폰·PC에서도 잘 재생되는 H.264 형식 (최대 1080p)\n" +
+                    "• 영상은 갤러리(Movies/YTDownloader)에 저장돼요\n" +
                     "• 소리는 내 파일(Download/YTDownloader)에 저장돼요\n" +
                     "• 유튜브 앱에서 공유 → YT 다운로더 를 눌러도 주소가 자동으로 들어와요",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QualityPicker(selected: Quality, enabled: Boolean, onSelect: (Quality) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            "영상 화질",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Quality.entries.forEach { q ->
+                FilterChip(
+                    selected = q == selected,
+                    onClick = { onSelect(q) },
+                    enabled = enabled,
+                    label = { Text(q.label) },
+                )
+            }
+        }
+        Text(
+            text = when {
+                selected == Quality.BEST -> "유튜브에 있는 가장 높은 화질 그대로 받아요"
+                selected.compat -> "어디서나 잘 재생되는 H.264, 최대 1080p로 받아요"
+                else -> "${selected.label}보다 높지 않은 가장 좋은 화질로 받아요"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

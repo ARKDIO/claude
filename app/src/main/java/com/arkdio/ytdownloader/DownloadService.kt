@@ -47,11 +47,12 @@ class DownloadService : Service() {
             ACTION_START -> {
                 val url = intent.getStringExtra(EXTRA_URL)
                 val mode = Mode.entries[intent.getIntExtra(EXTRA_MODE, 0)]
+                val quality = Quality.entries[intent.getIntExtra(EXTRA_QUALITY, 0)]
                 if (url != null && job?.isActive != true) {
                     cancelled = false
                     job = scope.launch {
                         try {
-                            runDownload(url, mode)
+                            runDownload(url, mode, quality)
                         } finally {
                             job = null
                             finish()
@@ -75,7 +76,7 @@ class DownloadService : Service() {
         stopSelf()
     }
 
-    private suspend fun runDownload(url: String, mode: Mode) {
+    private suspend fun runDownload(url: String, mode: Mode, quality: Quality) {
         var title: String? = null
         var part = 0
         fun running(stage: String, percent: Float?, eta: Long = -1) {
@@ -98,7 +99,7 @@ class DownloadService : Service() {
 
         try {
             running("영상 정보를 가져오는 중이에요…", null)
-            val request = buildRequest(url, mode, workDir)
+            val request = buildRequest(url, mode, quality, workDir)
 
             YoutubeDL.getInstance().execute(request, PROCESS_ID) { progress, eta, line ->
                 when {
@@ -146,7 +147,7 @@ class DownloadService : Service() {
         }
     }
 
-    private fun buildRequest(url: String, mode: Mode, workDir: File): YoutubeDLRequest {
+    private fun buildRequest(url: String, mode: Mode, quality: Quality, workDir: File): YoutubeDLRequest {
         val template = "${workDir.absolutePath}/%(title).150B$ID_SEPARATOR%(id)s.%(ext)s"
         return YoutubeDLRequest(url).apply {
             addOption("--no-playlist")
@@ -155,9 +156,18 @@ class DownloadService : Service() {
             addOption("-o", template)
             when (mode) {
                 Mode.VIDEO -> {
-                    // Highest resolution/fps video stream + best audio (prefer AAC so the
-                    // merged MP4 plays everywhere, including the Gallery app).
-                    addOption("-f", "bv*+ba[ext=m4a]/bv*+ba/b")
+                    // Best video stream (within the chosen limit) + best audio, merged into
+                    // MP4 by stream copy — no re-encoding, so no quality loss.
+                    // AAC audio is preferred so the file plays everywhere, including the Gallery.
+                    if (quality.compat) {
+                        // H.264 video plays on practically every device.
+                        addOption("-f", "bv*[vcodec^=avc]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b")
+                    } else {
+                        addOption("-f", "bv*+ba[ext=m4a]/bv*+ba/b")
+                    }
+                    // "res:N" = prefer the largest resolution not above N (works for
+                    // vertical Shorts too, since it compares the shorter side).
+                    quality.maxRes?.let { addOption("-S", "res:$it") }
                     addOption("--merge-output-format", "mp4")
                 }
 
@@ -175,7 +185,7 @@ class DownloadService : Service() {
     private fun stageLabel(mode: Mode, part: Int): String = when (mode) {
         Mode.AUDIO -> "오디오를 받는 중이에요"
         Mode.VIDEO -> when (part) {
-            0, 1 -> "최고화질 영상을 받는 중이에요 (1/2)"
+            0, 1 -> "영상을 받는 중이에요 (1/2)"
             else -> "소리를 받는 중이에요 (2/2)"
         }
     }
@@ -280,16 +290,18 @@ class DownloadService : Service() {
         private const val ACTION_CANCEL = "com.arkdio.ytdownloader.CANCEL"
         private const val EXTRA_URL = "url"
         private const val EXTRA_MODE = "mode"
+        private const val EXTRA_QUALITY = "quality"
         private const val PROCESS_ID = "yt-download"
         private const val ID_SEPARATOR = " ~"
         private const val NOTIFICATION_PROGRESS = 1
         private const val NOTIFICATION_RESULT = 2
 
-        fun start(context: Context, url: String, mode: Mode) {
+        fun start(context: Context, url: String, mode: Mode, quality: Quality) {
             val intent = Intent(context, DownloadService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_URL, url)
                 .putExtra(EXTRA_MODE, mode.ordinal)
+                .putExtra(EXTRA_QUALITY, quality.ordinal)
             ContextCompat.startForegroundService(context, intent)
         }
 
