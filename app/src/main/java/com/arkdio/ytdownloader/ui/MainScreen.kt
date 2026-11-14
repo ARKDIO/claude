@@ -1,48 +1,54 @@
 package com.arkdio.ytdownloader.ui
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arkdio.ytdownloader.DownloadStatus
 import com.arkdio.ytdownloader.EngineState
@@ -50,18 +56,20 @@ import com.arkdio.ytdownloader.MainViewModel
 import com.arkdio.ytdownloader.Mode
 import com.arkdio.ytdownloader.Quality
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val Radius = RoundedCornerShape(16.dp)
+
 @Composable
 fun MainScreen(
     viewModel: MainViewModel,
     onDownload: (Mode) -> Unit,
     onOpen: (DownloadStatus.Done) -> Unit,
 ) {
+    val p = LocalPalette.current
     val status by viewModel.status.collectAsStateWithLifecycle()
     val engine by viewModel.engine.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    val clipboard = LocalClipboardManager.current
     val busy = status is DownloadStatus.Running
+    val ready = engine is EngineState.Ready
 
     LaunchedEffect(viewModel.message) {
         viewModel.message?.let {
@@ -71,122 +79,149 @@ fun MainScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("YT 다운로더", fontWeight = FontWeight.Bold) }) },
+        containerColor = p.bg,
         snackbarHost = { SnackbarHost(snackbar) },
+        bottomBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(p.bg)
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TossButton(
+                    text = "소리만",
+                    container = p.fill,
+                    content = p.body,
+                    enabled = !busy && ready,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onDownload(Mode.AUDIO) },
+                )
+                TossButton(
+                    text = "영상 저장",
+                    container = p.blue,
+                    content = p.onBlue,
+                    enabled = !busy && ready,
+                    modifier = Modifier.weight(2f),
+                    onClick = { onDownload(Mode.VIDEO) },
+                )
+            }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = 20.dp)
+                .animateContentSize(),
         ) {
-            OutlinedTextField(
+            Spacer(Modifier.height(36.dp))
+            Text(
+                "유튜브 영상을\n저장할게요",
+                color = p.title,
+                fontSize = 26.sp,
+                lineHeight = 36.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(28.dp))
+
+            UrlField(
                 value = viewModel.url,
                 onValueChange = { viewModel.url = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("유튜브 주소") },
-                placeholder = { Text("https://youtu.be/…") },
-                singleLine = true,
                 enabled = !busy,
-                trailingIcon = {
-                    if (viewModel.url.isNotEmpty() && !busy) {
-                        IconButton(onClick = { viewModel.url = "" }) {
-                            Icon(Icons.Filled.Clear, contentDescription = "지우기")
-                        }
-                    }
-                },
             )
 
-            OutlinedButton(
-                onClick = { viewModel.url = clipboard.getText()?.text.orEmpty() },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("📋 클립보드에서 붙여넣기") }
+            Spacer(Modifier.height(28.dp))
+            Text("화질", color = p.sub, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(10.dp))
+            QualityPicker(viewModel.quality, enabled = !busy, onSelect = viewModel::selectQuality)
 
-            QualityPicker(
-                selected = viewModel.quality,
-                enabled = !busy,
-                onSelect = viewModel::selectQuality,
-            )
+            Spacer(Modifier.height(28.dp))
+            StatusCard(status, onCancel = viewModel::cancel, onOpen = onOpen, onClear = viewModel::clearResult)
 
-            Button(
-                onClick = { onDownload(Mode.VIDEO) },
-                enabled = !busy && engine is EngineState.Ready,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-            ) {
-                Text(
-                    "🎬 영상 다운로드 (${viewModel.quality.label})",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
-
-            FilledTonalButton(
-                onClick = { onDownload(Mode.AUDIO) },
-                enabled = !busy && engine is EngineState.Ready,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            ) { Text("🎵 소리만 다운로드") }
-
-            StatusCard(
-                status = status,
-                onCancel = viewModel::cancel,
-                onOpen = onOpen,
-                onClear = viewModel::clearResult,
-            )
-
-            Spacer(Modifier.height(8.dp))
-            EngineRow(engine, viewModel.updating, enabled = !busy, onUpdate = viewModel::updateEngine)
-
-            Text(
-                "• 어떤 화질을 골라도 변환 없이 원본 그대로 받아서 화질 저하가 없어요\n" +
-                    "• 낮은 화질을 고르면 처음부터 작은 영상을 받아서 용량이 줄어요\n" +
-                    "• 호환 모드: 오래된 폰·PC에서도 잘 재생되는 H.264 형식 (최대 1080p)\n" +
-                    "• 영상은 갤러리(Movies/YTDownloader)에 저장돼요\n" +
-                    "• 소리는 내 파일(Download/YTDownloader)에 저장돼요\n" +
-                    "• 유튜브 앱에서 공유 → YT 다운로더 를 눌러도 주소가 자동으로 들어와요",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.height(24.dp))
+            EngineLine(engine, viewModel.updating, enabled = !busy, onUpdate = viewModel::updateEngine)
+            Spacer(Modifier.height(12.dp))
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun QualityPicker(selected: Quality, enabled: Boolean, onSelect: (Quality) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            "영상 화질",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Quality.entries.forEach { q ->
-                FilterChip(
-                    selected = q == selected,
-                    onClick = { onSelect(q) },
-                    enabled = enabled,
-                    label = { Text(q.label) },
-                )
+private fun UrlField(value: String, onValueChange: (String) -> Unit, enabled: Boolean) {
+    val p = LocalPalette.current
+    val clipboard = LocalClipboardManager.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(Radius)
+            .background(p.fill)
+            .padding(start = 18.dp, end = 8.dp)
+            .height(58.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.weight(1f)) {
+            if (value.isEmpty()) {
+                Text("유튜브 링크", color = p.sub, fontSize = 17.sp, maxLines = 1)
+            }
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                enabled = enabled,
+                singleLine = true,
+                textStyle = TextStyle(color = p.title, fontSize = 17.sp),
+                cursorBrush = SolidColor(p.blue),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (enabled) {
+            if (value.isEmpty()) {
+                SmallAction("붙여넣기", p.blue) { onValueChange(clipboard.getText()?.text.orEmpty()) }
+            } else {
+                SmallAction("지우기", p.sub) { onValueChange("") }
             }
         }
-        Text(
-            text = when {
-                selected == Quality.BEST -> "유튜브에 있는 가장 높은 화질 그대로 받아요"
-                selected.compat -> "어디서나 잘 재생되는 H.264, 최대 1080p로 받아요"
-                else -> "${selected.label}보다 높지 않은 가장 좋은 화질로 받아요"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    }
+}
+
+@Composable
+private fun SmallAction(text: String, color: Color, onClick: () -> Unit) {
+    Text(
+        text,
+        color = color,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun QualityPicker(selected: Quality, enabled: Boolean, onSelect: (Quality) -> Unit) {
+    val p = LocalPalette.current
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Quality.entries.forEach { q ->
+            val on = q == selected
+            Text(
+                q.label,
+                color = if (on) p.blue else p.body,
+                fontSize = 15.sp,
+                fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (on) p.blueSoft else p.fill)
+                    .clickable(enabled = enabled) { onSelect(q) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        }
     }
 }
 
@@ -197,81 +232,129 @@ private fun StatusCard(
     onOpen: (DownloadStatus.Done) -> Unit,
     onClear: () -> Unit,
 ) {
+    val p = LocalPalette.current
+    val card = Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(20.dp))
+        .background(p.fill)
+        .padding(20.dp)
+
     when (status) {
         DownloadStatus.Idle -> Unit
 
-        is DownloadStatus.Running -> Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                status.title?.let {
-                    Text(it, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        is DownloadStatus.Running -> Column(card) {
+            Text(
+                status.title ?: "준비 중",
+                color = p.title, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(status.stage, color = p.sub, fontSize = 14.sp)
+            Spacer(Modifier.height(16.dp))
+            if (status.percent != null) {
+                LinearProgressIndicator(
+                    progress = { status.percent / 100f },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                    color = p.blue, trackColor = p.bg, strokeCap = StrokeCap.Round,
+                    drawStopIndicator = {},
+                )
+            } else {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                    color = p.blue, trackColor = p.bg, strokeCap = StrokeCap.Round,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    status.percent?.let { "${it.toInt()}%" } ?: "",
+                    color = p.blue, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                )
+                if ((status.percent ?: 0f) > 0f && status.etaSeconds > 0) {
+                    Text("  ${formatEta(status.etaSeconds)} 남음", color = p.sub, fontSize = 14.sp)
                 }
-                Text(status.stage, style = MaterialTheme.typography.bodyMedium)
-                if (status.percent != null) {
-                    LinearProgressIndicator(
-                        progress = { status.percent / 100f },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        buildString {
-                            append("${"%.1f".format(status.percent)}%")
-                            if (status.etaSeconds > 0) append(" · 남은 시간 ${formatEta(status.etaSeconds)}")
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                } else {
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
-                }
-                TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.End)) { Text("취소") }
+                Spacer(Modifier.weight(1f))
+                SmallAction("취소", p.sub, onCancel)
             }
         }
 
-        is DownloadStatus.Done -> Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("다운로드 완료! 🎉", fontWeight = FontWeight.Bold)
-                Text(status.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("저장 위치: ${status.location}", style = MaterialTheme.typography.bodySmall)
-                Row(Modifier.align(Alignment.End)) {
-                    TextButton(onClick = onClear) { Text("닫기") }
-                    Button(onClick = { onOpen(status) }) { Text("열기") }
-                }
+        is DownloadStatus.Done -> Column(card) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(p.blue),
+                contentAlignment = Alignment.Center,
+            ) { Text("✓", color = p.onBlue, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+            Spacer(Modifier.height(14.dp))
+            Text("저장했어요", color = p.title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(status.title, color = p.body, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TossButton("닫기", p.bg, p.body, true, Modifier.weight(1f), height = 48.dp, onClick = onClear)
+                TossButton("열기", p.blue, p.onBlue, true, Modifier.weight(1f), height = 48.dp) { onOpen(status) }
             }
         }
 
-        is DownloadStatus.Failed -> Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("앗, 문제가 생겼어요 😢", fontWeight = FontWeight.Bold)
-                Text(status.message, style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = onClear, modifier = Modifier.align(Alignment.End)) { Text("닫기") }
+        is DownloadStatus.Failed -> Column(card) {
+            Text("저장하지 못했어요", color = p.title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Text(status.message, color = p.body, fontSize = 14.sp)
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                SmallAction("닫기", p.sub, onClear)
             }
         }
     }
 }
 
 @Composable
-private fun EngineRow(engine: EngineState, updating: Boolean, enabled: Boolean, onUpdate: () -> Unit) {
+private fun EngineLine(engine: EngineState, updating: Boolean, enabled: Boolean, onUpdate: () -> Unit) {
+    val p = LocalPalette.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = when (engine) {
-                EngineState.Initializing -> "엔진 준비 중… (처음 실행은 조금 걸려요)"
-                is EngineState.Ready -> "엔진 버전: ${engine.version}"
-                is EngineState.Failed -> "엔진 오류: ${engine.message}"
+            when (engine) {
+                EngineState.Initializing -> "준비 중…"
+                is EngineState.Ready -> "엔진 ${engine.version}"
+                is EngineState.Failed -> "엔진 오류"
             },
-            style = MaterialTheme.typography.bodySmall,
+            color = p.sub, fontSize = 13.sp,
             modifier = Modifier.weight(1f),
         )
         if (updating || engine is EngineState.Initializing) {
-            CircularProgressIndicator(Modifier.padding(8.dp).size(20.dp), strokeWidth = 2.dp)
-        } else {
-            TextButton(onClick = onUpdate, enabled = enabled && engine is EngineState.Ready) {
-                Text("엔진 업데이트")
-            }
+            CircularProgressIndicator(Modifier.size(16.dp), color = p.sub, strokeWidth = 2.dp)
+        } else if (enabled && engine is EngineState.Ready) {
+            Text(
+                "업데이트",
+                color = p.sub, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable(onClick = onUpdate).padding(4.dp),
+            )
         }
+    }
+}
+
+@Composable
+private fun TossButton(
+    text: String,
+    container: Color,
+    content: Color,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    height: Dp = 56.dp,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shape = Radius,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = container,
+            contentColor = content,
+            disabledContainerColor = container.copy(alpha = 0.4f),
+            disabledContentColor = content.copy(alpha = 0.6f),
+        ),
+        elevation = null,
+        modifier = modifier.height(height),
+    ) {
+        Text(text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
     }
 }
 
